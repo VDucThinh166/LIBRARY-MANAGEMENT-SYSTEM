@@ -53,7 +53,7 @@ Hệ thống được phân quyền chặt chẽ giữa **Khách (Guest)**, **Th
     ```
     *(Lưu ý: Hệ thống sẽ tự động tạo file `library_data.json` và tài khoản Admin mặc định trong lần chạy đầu tiên).*
 
-### Cách 2: Chạy bằng Docker (Khuyên dùng khi nộp bài)
+### Cách 2: Chạy bằng Docker 
 
 1.  **Build Image:**
     ```bash
