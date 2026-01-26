@@ -154,7 +154,7 @@ class LibraryController:
         # TRƯỜNG HỢP 1: ADMIN TRẢ SÁCH GIÙM
         if self.current_user.role == "Librarian":
             if not username: 
-                return False, "⚠️ Lỗi: Admin phải nhập Username của người trả sách."
+                return False, "Lỗi: Admin phải nhập Username của người trả sách."
             # Tìm phiếu mượn khớp cả ISBN lẫn USERNAME
             target = next((l for l in self.data["loans"] 
                            if l["isbn"] == isbn 
