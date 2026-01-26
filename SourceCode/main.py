@@ -28,7 +28,7 @@ def librarian_menu():
 # --- ACTIONS ---
 def act_book_details(isbn):
     b = system.get_book_by_isbn(isbn)
-    if not b: print("❌ Sách không tồn tại."); return
+    if not b: print("Sách không tồn tại."); return
     tot, avail = system.get_book_availability(isbn)
     
     print("\n[CHI TIẾT SÁCH]")
@@ -42,10 +42,10 @@ def act_book_details(isbn):
             try:
                 q = int(input(f"Nhập số lượng (Max {avail}): "))
                 if q > 0: print(system.add_to_cart(isbn, q)[1])
-                else: print("⚠️ Số lượng phải > 0")
-            except: print("⚠️ Nhập số không hợp lệ.")
-        elif not system.current_user: print("⚠️ Hãy đăng nhập.")
-        else: print("⚠️ Admin không dùng giỏ.")
+                else: print("Số lượng phải > 0")
+            except: print("Nhập số không hợp lệ.")
+        elif not system.current_user: print("Hãy đăng nhập.")
+        else: print("Admin không dùng giỏ.")
 
 def act_search():
     while True:

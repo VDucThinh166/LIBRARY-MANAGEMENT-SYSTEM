@@ -24,7 +24,7 @@ class LibraryController:
         for u in self.data["users"]:
             if u["username"] == username and u["password"] == hashed_pw:
                 if u.get("is_blocked", False):
-                    print("❌ TÀI KHOẢN BỊ CHẶN (BLOCKED). Liên hệ Admin.")
+                    print("TÀI KHOẢN BỊ CHẶN (BLOCKED). Liên hệ Admin.")
                     return False
                 
                 # Load User với đầy đủ tham số (Fix lỗi 8 arguments)
@@ -167,7 +167,7 @@ class LibraryController:
                            and l["isbn"] == isbn 
                            and l["status"] in ["Active", "Overdue"]), None)
         
-        if not target: return False, "❌ Không tìm thấy phiếu mượn hợp lệ."
+        if not target: return False, "Không tìm thấy phiếu mượn hợp lệ."
 
         # --- Tính toán phạt ---
         due = datetime.strptime(target["due_date"], "%Y-%m-%d").date()
@@ -176,8 +176,8 @@ class LibraryController:
         
         msg = f"Đã trả sách '{target['isbn']}' của user '{target['username']}'."
         
-        if late > 7: msg += f" 🔴 TRỄ {late} NGÀY! PHẠT: {late*5000} VNĐ."
-        elif late > 3: msg += f" 🟡 CẢNH BÁO: Trễ {late} ngày."
+        if late > 7: msg += f"TRỄ {late} NGÀY! PHẠT: {late*5000} VNĐ."
+        elif late > 3: msg += f"CẢNH BÁO: Trễ {late} ngày."
 
         bk = next((b for b in self.data["books"] if b["isbn"]==isbn), None)
         if bk: bk["quantity"] += 1
