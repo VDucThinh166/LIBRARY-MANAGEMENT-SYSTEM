@@ -149,24 +149,35 @@ class LibraryController:
         self._save()
         return True, f"Mượn thành công. Hạn trả: {loan['due_date']}"
 
-    def return_book(self, isbn):
-        # Admin trả hộ hoặc Member tự trả
+    def return_book(self, isbn, username=None):
         target = None
+        # TRƯỜNG HỢP 1: ADMIN TRẢ SÁCH GIÙM
         if self.current_user.role == "Librarian":
-            target = next((l for l in self.data["loans"] if l["isbn"]==isbn and l["status"] in ["Active","Overdue"]), None)
+            if not username: 
+                return False, "⚠️ Lỗi: Admin phải nhập Username của người trả sách."
+            # Tìm phiếu mượn khớp cả ISBN lẫn USERNAME
+            target = next((l for l in self.data["loans"] 
+                           if l["isbn"] == isbn 
+                           and l["username"] == username  # <--- Điều kiện quan trọng
+                           and l["status"] in ["Active", "Overdue"]), None)
+        # TRƯỜNG HỢP 2: MEMBER TỰ TRẢ SÁCH
         else:
-            target = next((l for l in self.data["loans"] if l["username"]==self.current_user.username and l["isbn"]==isbn and l["status"] in ["Active","Overdue"]), None)
+            target = next((l for l in self.data["loans"] 
+                           if l["username"] == self.current_user.username 
+                           and l["isbn"] == isbn 
+                           and l["status"] in ["Active", "Overdue"]), None)
         
-        if not target: return False, "Không tìm thấy phiếu mượn."
+        if not target: return False, "❌ Không tìm thấy phiếu mượn hợp lệ."
 
-        # Tính phạt
+        # --- Tính toán phạt ---
         due = datetime.strptime(target["due_date"], "%Y-%m-%d").date()
         today = datetime.now().date()
         late = (today - due).days
-        msg = f"Đã trả sách của {target['username']}."
         
-        if late > 7: msg += f" TRỄ {late} NGÀY! PHẠT: {late*5000} VNĐ."
-        elif late > 3: msg += f" CẢNH BÁO: Trễ {late} ngày."
+        msg = f"Đã trả sách '{target['isbn']}' của user '{target['username']}'."
+        
+        if late > 7: msg += f" 🔴 TRỄ {late} NGÀY! PHẠT: {late*5000} VNĐ."
+        elif late > 3: msg += f" 🟡 CẢNH BÁO: Trễ {late} ngày."
 
         bk = next((b for b in self.data["books"] if b["isbn"]==isbn), None)
         if bk: bk["quantity"] += 1

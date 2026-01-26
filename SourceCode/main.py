@@ -106,7 +106,11 @@ def main():
                 system.admin_add_book(Book(input("ISBN: "), input("Title: "), input("Author: "), "Pub", 2024, input("Qty: "), "Loc", "IT"))
             elif c=='2': act_manage_patrons()
             elif c=='3': print(system.admin_borrow_for_user(input("User: "), input("ISBN: "))[1])
-            elif c=='4': print(system.return_book(input("ISBN trả: "))[1])
+            elif c=='4':
+                print("\n[NHẬN TRẢ SÁCH]")
+                isbn_input = input("Nhập ISBN sách trả: ")
+                user_input = input("Nhập Username người trả: ")
+                print(system.return_book(isbn_input, user_input)[1])
             elif c=='5': 
                 for l in system.get_all_active_loans(): print(l)
                 input("Enter...")
