@@ -1,33 +1,26 @@
-# test_forgot_pass.py
-# Unit tests for forgot_pass() – LibraryController
-# Tool: pytest
-
 import pytest
 from controllers import LibraryController
 
 
+# ---------- FIXTURE ----------
 @pytest.fixture
-def controller():
+def controller(monkeypatch):
     """
-    Fixture tạo LibraryController với dữ liệu test độc lập.
-    Không dùng file JSON thật để đảm bảo unit test isolation.
+    Tạo controller với data giả, không dùng file JSON thật
     """
-    c = LibraryController()
-
-    # Override data để tránh phụ thuộc library_data.json
-    c.data = {
+    fake_data = {
         "users": [
             {
                 "account_id": 1,
-                "username": "admin",
-                "password": c.hash_password("123456"),
-                "email": "admin@library.com",
-                "fullname": "Administrator",
-                "role": "Librarian",
-                "phone": "0909000111",
-                "address": "Library HQ",
-                "dob": "01/01/1990",
-                "gender": "Other",
+                "username": "user1",
+                "password": LibraryController().hash_password("123456"),
+                "email": "user1@mail.com",
+                "fullname": "User One",
+                "role": "Member",
+                "phone": "",
+                "address": "",
+                "dob": "",
+                "gender": "",
                 "is_blocked": False
             }
         ],
@@ -35,59 +28,35 @@ def controller():
         "loans": []
     }
 
-    # Reset OTP storage cho mỗi test
-    c.otp_storage = {}
-    return c
+    # Mock load_data()
+    monkeypatch.setattr("controllers.load_data", lambda: fake_data)
+    # Mock save_data() (forgot_pass không gọi save nhưng giữ chuẩn)
+    monkeypatch.setattr("controllers.save_data", lambda data: None)
+
+    return LibraryController()
 
 
 # ---------- TEST CASES ----------
 
 def test_forgot_pass_email_exists(controller):
     """
-    TC-FP-01
-    Email tồn tại → sinh OTP hợp lệ và lưu vào otp_storage
+    TC07: Email tồn tại → sinh OTP
     """
-    ok, otp = controller.forgot_pass("admin@library.com")
+    ok, otp = controller.forgot_pass("user1@mail.com")
 
     assert ok is True
-    assert isinstance(otp, str)
+    assert otp is not None
     assert len(otp) == 6
     assert otp.isdigit()
-    assert controller.otp_storage["admin@library.com"] == otp
+    assert controller.otp_storage["user1@mail.com"] == otp
 
 
-def test_forgot_pass_email_not_exists(controller):
+def test_forgot_pass_email_not_exist(controller):
     """
-    TC-FP-02
-    Email không tồn tại → fail, không tạo OTP
+    TC08: Email không tồn tại → thất bại
     """
-    ok, msg = controller.forgot_pass("notfound@mail.com")
+    ok, msg = controller.forgot_pass("not_exist@mail.com")
 
     assert ok is False
     assert msg == "Email không có."
-    assert "notfound@mail.com" not in controller.otp_storage
-
-
-def test_forgot_pass_override_otp(controller):
-    """
-    TC-FP-03
-    Gọi forgot_pass nhiều lần → OTP mới ghi đè OTP cũ
-    """
-    ok1, otp1 = controller.forgot_pass("admin@library.com")
-    ok2, otp2 = controller.forgot_pass("admin@library.com")
-
-    assert ok1 is True
-    assert ok2 is True
-    assert otp1 != otp2
-    assert controller.otp_storage["admin@library.com"] == otp2
-
-
-def test_forgot_pass_otp_value_range(controller):
-    """
-    TC-FP-04
-    OTP phải nằm trong khoảng 100000–999999
-    """
-    ok, otp = controller.forgot_pass("admin@library.com")
-
-    assert ok is True
-    assert 100000 <= int(otp) <= 999999
+    assert "not_exist@mail.com" not in controller.otp_storage

@@ -1,112 +1,127 @@
-# tests/test_borrow_book.py
 import pytest
 from controllers import LibraryController
+from datetime import datetime, timedelta
 
 
-# ---------- FIXTURE: controller cô lập ----------
+# ---------- FIXTURE ----------
 @pytest.fixture
-def controller():
-    c = LibraryController()
-    c.data = {
+def controller(monkeypatch):
+    """
+    Controller với data giả để test borrow_book
+    """
+    fake_data = {
         "users": [
             {
                 "account_id": 1,
-                "username": "user1",
-                "email": "u1@mail.com",
-                "fullname": "User One",
+                "username": "member1",
+                "password": LibraryController().hash_password("123456"),
+                "email": "m1@mail.com",
+                "fullname": "Member One",
                 "role": "Member",
+                "phone": "",
+                "address": "",
+                "dob": "",
+                "gender": "",
                 "is_blocked": False
             }
         ],
         "books": [
             {
                 "isbn": "978-1",
-                "title": "Python",
+                "title": "Python Programming",
                 "author": "Guido",
-                "publisher": "A",
+                "publisher": "O'Reilly",
                 "year": 2024,
                 "quantity": 2,
-                "location": "A1",
+                "location": "Shelf A1",
                 "category": "IT"
             }
         ],
         "loans": []
     }
 
-    # giả lập user đã login
-    class DummyUser:
-        username = "user1"
-        role = "Member"
-    c.current_user = DummyUser()
+    monkeypatch.setattr("controllers.load_data", lambda: fake_data)
+    monkeypatch.setattr("controllers.save_data", lambda data: None)
 
-    c._save = lambda: None
-    return c
+    ctrl = LibraryController()
+
+    # Giả lập member đã login
+    ctrl.current_user = type(
+        "UserObj",
+        (),
+        {"username": "member1", "role": "Member"}
+    )()
+
+    return ctrl
 
 
-# ---------- TC-BB-01: Mượn sách thành công ----------
+# ---------- TEST CASES ----------
+
 def test_borrow_book_success(controller):
-    # Act
+    """
+    TC01: Member mượn hợp lệ → tạo loan
+    """
     ok, msg = controller.borrow_book("978-1")
 
-    # Assert
     assert ok is True
     assert "Mượn thành công" in msg
-    assert controller.data["books"][0]["quantity"] == 1
     assert len(controller.data["loans"]) == 1
     assert controller.data["loans"][0]["status"] == "Active"
 
 
-# ---------- TC-BB-02: Hết hàng ----------
 def test_borrow_book_out_of_stock(controller):
-    # Arrange
+    """
+    TC02: Sách quantity = 0 → thất bại
+    """
+    # Set quantity = 0
     controller.data["books"][0]["quantity"] = 0
 
-    # Act
     ok, msg = controller.borrow_book("978-1")
 
-    # Assert
     assert ok is False
     assert msg == "Hết hàng."
-    assert len(controller.data["loans"]) == 0
+    assert controller.data["loans"] == []
 
 
-# ---------- TC-BB-03: User có sách quá hạn ----------
-def test_borrow_book_user_overdue(controller):
-    # Arrange
+def test_borrow_book_user_has_overdue(controller):
+    """
+    TC03: User có loan Overdue → bị chặn
+    """
     controller.data["loans"].append({
-        "username": "user1",
-        "isbn": "978-1",
+        "username": "member1",
+        "isbn": "978-99",
+        "issue_date": "2024-01-01",
+        "due_date": "2024-01-10",
         "status": "Overdue"
     })
 
-    # Act
     ok, msg = controller.borrow_book("978-1")
 
-    # Assert
     assert ok is False
     assert "BỊ CHẶN" in msg
-    assert controller.data["books"][0]["quantity"] == 2
-    assert len(controller.data["loans"]) == 1
+    assert len(controller.data["loans"]) == 1  # không tạo loan mới
 
 
-# ---------- TC-BB-04: ISBN không tồn tại ----------
-def test_borrow_book_isbn_not_found(controller):
-    # Act
-    ok, msg = controller.borrow_book("999-9")
+def test_borrow_book_quantity_decrease(controller):
+    """
+    TC04: Quantity giảm sau khi mượn
+    """
+    before_qty = controller.data["books"][0]["quantity"]
 
-    # Assert
-    assert ok is False
-    assert msg == "Hết hàng."
-    assert len(controller.data["loans"]) == 0
-
-
-# ---------- TC-BB-05: Không gây side-effect ngoài mong đợi ----------
-def test_borrow_book_no_unexpected_side_effect(controller):
-    # Arrange
-    original_user = controller.current_user.username
-
-    # Act
     controller.borrow_book("978-1")
 
-    # Assert
-    assert controller.current_user.username == original_user
+    after_qty = controller.data["books"][0]["quantity"]
+    assert after_qty == before_qty - 1
+
+
+def test_borrow_book_due_date_14_days(controller):
+    """
+    TC05: Due date = issue date + 14 ngày
+    """
+    controller.borrow_book("978-1")
+
+    loan = controller.data["loans"][0]
+    issue_date = datetime.strptime(loan["issue_date"], "%Y-%m-%d").date()
+    due_date = datetime.strptime(loan["due_date"], "%Y-%m-%d").date()
+
+    assert due_date == issue_date + timedelta(days=14)

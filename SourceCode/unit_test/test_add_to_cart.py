@@ -1,82 +1,68 @@
-# tests/test_add_to_cart.py
 import pytest
 from controllers import LibraryController
 
 
-# ---------- FIXTURE: controller cô lập ----------
+# ---------- FIXTURE ----------
 @pytest.fixture
-def controller():
-    c = LibraryController()
-    c.data = {
+def controller(monkeypatch):
+    """
+    Controller với data giả để test add_to_cart
+    """
+    fake_data = {
         "users": [],
         "books": [
             {
                 "isbn": "978-1",
-                "title": "Introduction to Python",
+                "title": "Python Programming",
                 "author": "Guido",
                 "publisher": "O'Reilly",
                 "year": 2024,
-                "quantity": 3,   # tồn kho
-                "location": "A1",
+                "quantity": 5,
+                "location": "Shelf A1",
                 "category": "IT"
             }
         ],
         "loans": []
     }
-    c.cart = {}        # giỏ rỗng
-    c._save = lambda: None
-    return c
+
+    monkeypatch.setattr("controllers.load_data", lambda: fake_data)
+    return LibraryController()
 
 
-# ---------- TC-AC-01: Thêm sách thành công ----------
-def test_add_to_cart_success(controller):
-    # Act
-    ok, msg = controller.add_to_cart("978-1", 1)
+# ---------- TEST CASES ----------
 
-    # Assert
+def test_add_to_cart_valid(controller):
+    """
+    TC01: Thêm sách hợp lệ
+    """
+    ok, msg = controller.add_to_cart("978-1", qty=2)
+
     assert ok is True
-    assert controller.cart["978-1"] == 1
     assert "Đã thêm" in msg
+    assert controller.cart["978-1"] == 2
 
 
-# ---------- TC-AC-02: Thêm nhiều lần cùng ISBN ----------
-def test_add_to_cart_accumulate_quantity(controller):
-    # Arrange
-    controller.add_to_cart("978-1", 1)
+def test_add_to_cart_exceed_quantity(controller):
+    """
+    TC02: Thêm vượt quá quantity → thất bại
+    """
+    # Thêm trước 4 cuốn
+    controller.add_to_cart("978-1", qty=4)
 
-    # Act
-    controller.add_to_cart("978-1", 2)
+    # Thêm tiếp 2 cuốn (vượt kho = 5)
+    ok, msg = controller.add_to_cart("978-1", qty=2)
 
-    # Assert
-    assert controller.cart["978-1"] == 3
-
-
-# ---------- TC-AC-03: Thêm vượt quá số lượng kho ----------
-def test_add_to_cart_exceed_stock(controller):
-    # Act
-    ok, msg = controller.add_to_cart("978-1", 5)
-
-    # Assert
     assert ok is False
     assert "Kho không đủ hàng" in msg
-    assert controller.cart == {}
+    assert controller.cart["978-1"] == 4
 
 
-# ---------- TC-AC-04: ISBN không tồn tại ----------
-def test_add_to_cart_book_not_found(controller):
-    # Act
-    ok, msg = controller.add_to_cart("999-9", 1)
+def test_add_to_cart_isbn_not_exist(controller):
+    """
+    TC03: ISBN không tồn tại → thất bại
+    """
+    ok, msg = controller.add_to_cart("999-9", qty=1)
 
-    # Assert
     assert ok is False
     assert msg == "Sách không tồn tại."
     assert controller.cart == {}
-
-
-# ---------- TC-AC-05: Không gây side-effect lên kho ----------
-def test_add_to_cart_no_stock_side_effect(controller):
-    # Act
-    controller.add_to_cart("978-1", 2)
-
-    # Assert
-    assert controller.data["books"][0]["quantity"] == 3

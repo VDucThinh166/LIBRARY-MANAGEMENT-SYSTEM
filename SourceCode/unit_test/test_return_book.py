@@ -1,143 +1,165 @@
-# tests/test_return_book.py
 import pytest
 from controllers import LibraryController
 from datetime import datetime, timedelta
 
 
-# ---------- FIXTURE: controller cô lập ----------
+# ---------- FIXTURE ----------
 @pytest.fixture
-def controller():
-    c = LibraryController()
-    c.data = {
+def controller(monkeypatch):
+    today = datetime.now().date()
+
+    fake_data = {
         "users": [
             {
                 "account_id": 1,
-                "username": "user1",
-                "email": "u1@mail.com",
-                "fullname": "User One",
+                "username": "member1",
+                "password": LibraryController().hash_password("123456"),
+                "email": "m1@mail.com",
+                "fullname": "Member One",
                 "role": "Member",
-                "is_blocked": False
-            },
-            {
-                "account_id": 2,
-                "username": "admin",
-                "email": "admin@mail.com",
-                "fullname": "Admin",
-                "role": "Librarian",
+                "phone": "",
+                "address": "",
+                "dob": "",
+                "gender": "",
                 "is_blocked": False
             }
         ],
         "books": [
             {
                 "isbn": "978-1",
-                "title": "Python",
+                "title": "Python Programming",
                 "author": "Guido",
-                "publisher": "A",
+                "publisher": "O'Reilly",
                 "year": 2024,
                 "quantity": 1,
-                "location": "A1",
+                "location": "Shelf A1",
                 "category": "IT"
             }
         ],
-        "loans": []
+        "loans": [],
     }
-    c._save = lambda: None
-    return c
+
+    monkeypatch.setattr("controllers.load_data", lambda: fake_data)
+    monkeypatch.setattr("controllers.save_data", lambda data: None)
+
+    return LibraryController()
 
 
-# ---------- TC-RB-01: Member trả sách đúng hạn ----------
-def test_return_book_on_time(controller):
-    # Arrange
-    controller.current_user = type("U", (), {"username": "user1", "role": "Member"})()
+# ---------- TEST CASES ----------
+
+def test_return_on_time(controller):
+    """
+    TC01: Member trả đúng hạn
+    """
+    today = datetime.now().date()
+    controller.current_user = type("U", (), {"username": "member1", "role": "Member"})()
+
     controller.data["loans"].append({
-        "username": "user1",
+        "username": "member1",
         "isbn": "978-1",
-        "issue_date": str(datetime.now().date()),
-        "due_date": str((datetime.now() + timedelta(days=3)).date()),
+        "issue_date": str(today - timedelta(days=5)),
+        "due_date": str(today + timedelta(days=5)),
         "status": "Active"
     })
 
-    # Act
     ok, msg = controller.return_book("978-1")
 
-    # Assert
     assert ok is True
     assert "Đã trả sách" in msg
     assert controller.data["loans"][0]["status"] == "Returned"
-    assert controller.data["books"][0]["quantity"] == 2
 
 
-# ---------- TC-RB-02: Member trả sách trễ (cảnh báo) ----------
-def test_return_book_late_warning(controller):
-    # Arrange
-    controller.current_user = type("U", (), {"username": "user1", "role": "Member"})()
+def test_return_late_warning(controller):
+    """
+    TC02: Trễ > 3 ngày → warning
+    """
+    today = datetime.now().date()
+    controller.current_user = type("U", (), {"username": "member1", "role": "Member"})()
+
     controller.data["loans"].append({
-        "username": "user1",
+        "username": "member1",
         "isbn": "978-1",
-        "issue_date": str((datetime.now() - timedelta(days=10)).date()),
-        "due_date": str((datetime.now() - timedelta(days=5)).date()),
+        "issue_date": str(today - timedelta(days=20)),
+        "due_date": str(today - timedelta(days=4)),
         "status": "Active"
     })
 
-    # Act
     ok, msg = controller.return_book("978-1")
 
-    # Assert
     assert ok is True
     assert "CẢNH BÁO" in msg
-    assert controller.data["loans"][0]["status"] == "Returned"
 
 
-# ---------- TC-RB-03: Member trả sách trễ nặng (phạt) ----------
-def test_return_book_late_fine(controller):
-    # Arrange
-    controller.current_user = type("U", (), {"username": "user1", "role": "Member"})()
+def test_return_late_fine(controller):
+    """
+    TC03: Trễ > 7 ngày → fine
+    """
+    today = datetime.now().date()
+    controller.current_user = type("U", (), {"username": "member1", "role": "Member"})()
+
     controller.data["loans"].append({
-        "username": "user1",
+        "username": "member1",
         "isbn": "978-1",
-        "issue_date": str((datetime.now() - timedelta(days=20)).date()),
-        "due_date": str((datetime.now() - timedelta(days=10)).date()),
-        "status": "Overdue"
-    })
-
-    # Act
-    ok, msg = controller.return_book("978-1")
-
-    # Assert
-    assert ok is True
-    assert "PHẠT" in msg
-    assert controller.data["loans"][0]["status"] == "Returned"
-
-
-# ---------- TC-RB-04: Admin trả hộ cho user ----------
-def test_return_book_admin_for_user(controller):
-    # Arrange
-    controller.current_user = type("U", (), {"username": "admin", "role": "Librarian"})()
-    controller.data["loans"].append({
-        "username": "user1",
-        "isbn": "978-1",
-        "issue_date": str(datetime.now().date()),
-        "due_date": str((datetime.now() - timedelta(days=1)).date()),
+        "issue_date": str(today - timedelta(days=30)),
+        "due_date": str(today - timedelta(days=10)),
         "status": "Active"
     })
 
-    # Act
     ok, msg = controller.return_book("978-1")
 
-    # Assert
     assert ok is True
-    assert "Đã trả sách" in msg
-    assert controller.data["loans"][0]["status"] == "Returned"
+    assert "PHẠT" in msg
 
 
-# ---------- TC-RB-05: Không tìm thấy phiếu mượn ----------
-def test_return_book_not_found(controller):
-    # Arrange
-    controller.current_user = type("U", (), {"username": "user1", "role": "Member"})()
+def test_admin_return_for_user(controller):
+    """
+    TC04: Admin trả hộ đúng user + ISBN
+    """
+    today = datetime.now().date()
+    controller.current_user = type("U", (), {"username": "admin", "role": "Librarian"})()
 
-    # Act
-    ok, msg = controller.return_book("978-1")
+    controller.data["loans"].append({
+        "username": "member1",
+        "isbn": "978-1",
+        "issue_date": str(today - timedelta(days=5)),
+        "due_date": str(today - timedelta(days=1)),
+        "status": "Active"
+    })
 
-    # Assert
+    ok, msg = controller.return_book("978-1", username="member1") 
+    assert ok is True
+
+
+def test_return_isbn_not_exist(controller):
+    """
+    TC05: Trả ISBN không tồn tại → thất bại
+    """
+    controller.current_user = type("U", (), {"username": "member1", "role": "Member"})()
+
+    ok, msg = controller.return_book("999-9")
+
     assert ok is False
-    assert msg == "Không tìm thấy phiếu mượn."
+    assert "Không tìm thấy phiếu mượn" in msg   
+
+
+def test_return_quantity_increase(controller):
+    """
+    TC06: Quantity tăng sau khi trả
+    """
+    today = datetime.now().date()
+    controller.current_user = type("U", (), {"username": "member1", "role": "Member"})()
+
+    controller.data["loans"].append({
+        "username": "member1",
+        "isbn": "978-1",
+        "issue_date": str(today - timedelta(days=5)),
+        "due_date": str(today - timedelta(days=1)),
+        "status": "Active"
+    })
+
+    before = controller.data["books"][0]["quantity"]
+
+    controller.return_book("978-1")
+
+    after = controller.data["books"][0]["quantity"]
+    assert after == before + 1

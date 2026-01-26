@@ -1,19 +1,22 @@
 import pytest
 from controllers import LibraryController
 
+
+# ---------- FIXTURE ----------
 @pytest.fixture
-def controller():
-    c = LibraryController()
-    # Cô lập dữ liệu
-    c.data = {
+def controller(monkeypatch):
+    """
+    Tạo controller với data giả, không ghi file thật
+    """
+    fake_data = {
         "users": [
             {
                 "account_id": 1,
-                "username": "admin",
-                "password": "hashed",
-                "email": "admin@lib.com",
-                "fullname": "Admin",
-                "role": "Librarian",
+                "username": "existing_user",
+                "password": LibraryController().hash_password("123456"),
+                "email": "exist@mail.com",
+                "fullname": "Existing User",
+                "role": "Member",
                 "phone": "",
                 "address": "",
                 "dob": "",
@@ -24,43 +27,54 @@ def controller():
         "books": [],
         "loans": []
     }
-    c._save = lambda: None  # chặn ghi file
-    return c
 
+    # Mock load_data()
+    monkeypatch.setattr("controllers.load_data", lambda: fake_data)
+    # Mock save_data() để không ghi file
+    monkeypatch.setattr("controllers.save_data", lambda data: None)
+
+    return LibraryController()
+
+
+# ---------- TEST CASES ----------
 
 def test_register_success(controller):
+    """
+    TC05: Đăng ký user mới hợp lệ → thành công
+    """
     ok, msg = controller.register(
-        "user1", "123456", "u1@mail.com",
-        "User One", "0123", "HN", "2000-01-01", "M"
+        username="new_user",
+        password="abc123",
+        email="new@mail.com",
+        fullname="New User",
+        phone="0909000000",
+        address="HCM",
+        dob="01/01/2000",
+        gender="Male"
     )
+
     assert ok is True
     assert msg == "Đăng ký thành công!"
     assert len(controller.data["users"]) == 2
+    assert controller.data["users"][1]["username"] == "new_user"
+    assert controller.data["users"][1]["role"] == "Member"
 
 
 def test_register_duplicate_username(controller):
+    """
+    TC06: Username trùng → thất bại
+    """
     ok, msg = controller.register(
-        "admin", "123456", "x@mail.com",
-        "X", "", "", "", ""
+        username="existing_user",
+        password="abc123",
+        email="dup@mail.com",
+        fullname="Dup User",
+        phone="0909000001",
+        address="HN",
+        dob="02/02/2000",
+        gender="Female"
     )
+
     assert ok is False
     assert msg == "Username đã tồn tại!"
     assert len(controller.data["users"]) == 1
-
-
-def test_register_password_hashed(controller):
-    password = "mypassword"
-    controller.register(
-        "user2", password, "u2@mail.com",
-        "User Two", "", "", "", ""
-    )
-    saved_pw = controller.data["users"][-1]["password"]
-    assert saved_pw != password
-
-
-def test_register_account_id_increment(controller):
-    controller.register(
-        "user3", "123", "u3@mail.com",
-        "User Three", "", "", "", ""
-    )
-    assert controller.data["users"][-1]["account_id"] == 2

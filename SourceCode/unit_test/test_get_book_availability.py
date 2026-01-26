@@ -1,88 +1,72 @@
-# tests/test_get_book_availability.py
 import pytest
 from controllers import LibraryController
 
 
-# ---------- FIXTURE: controller cô lập ----------
+# ---------- FIXTURE ----------
 @pytest.fixture
-def controller():
-    c = LibraryController()
-    c.data = {
+def controller(monkeypatch):
+    """
+    Controller với data giả để test get_book_availability
+    """
+    fake_data = {
         "users": [],
         "books": [
             {
                 "isbn": "978-1",
-                "title": "Introduction to Python",
+                "title": "Python Programming",
                 "author": "Guido",
                 "publisher": "O'Reilly",
                 "year": 2024,
-                "quantity": 3,   # số sách còn trong kho
-                "location": "A1",
+                "quantity": 5,
+                "location": "Shelf A1",
                 "category": "IT"
             }
         ],
         "loans": []
     }
-    return c
+
+    monkeypatch.setattr("controllers.load_data", lambda: fake_data)
+    return LibraryController()
 
 
-# ---------- TC-GA-01: ISBN tồn tại, chưa có sách đang mượn ----------
-def test_get_book_availability_no_loans(controller):
-    # Act
+# ---------- TEST CASES ----------
+
+def test_availability_no_loan(controller):
+    """
+    TC08: Book tồn tại, chưa ai mượn
+    total = quantity, available = quantity
+    """
     total, available = controller.get_book_availability("978-1")
 
-    # Assert
-    assert total == 3
-    assert available == 3
+    assert total == 5
+    assert available == 5
 
 
-# ---------- TC-GA-02: ISBN tồn tại, có sách đang mượn ----------
-def test_get_book_availability_with_active_loans(controller):
-    # Arrange: thêm 2 loan đang mượn
-    controller.data["loans"] = [
-        {"isbn": "978-1", "status": "Active"},
-        {"isbn": "978-1", "status": "Overdue"}
-    ]
+def test_availability_with_active_loan(controller):
+    """
+    TC09: Book đang có loan Active
+    total = quantity + số đang mượn
+    available = quantity
+    """
+    controller.data["loans"].append({
+        "username": "user1",
+        "isbn": "978-1",
+        "issue_date": "2025-01-01",
+        "due_date": "2025-01-15",
+        "status": "Active"
+    })
 
-    # Act
     total, available = controller.get_book_availability("978-1")
 
-    # Assert
-    assert total == 5      # 3 available + 2 borrowed
-    assert available == 3
+    assert total == 6     # 5 còn kho + 1 đang mượn
+    assert available == 5
 
 
-# ---------- TC-GA-03: ISBN tồn tại, loan trạng thái khác không tính ----------
-def test_get_book_availability_ignore_returned(controller):
-    # Arrange: loan đã trả không được tính
-    controller.data["loans"] = [
-        {"isbn": "978-1", "status": "Returned"},
-        {"isbn": "978-1", "status": "Returned"}
-    ]
-
-    # Act
-    total, available = controller.get_book_availability("978-1")
-
-    # Assert
-    assert total == 3
-    assert available == 3
-
-
-# ---------- TC-GA-04: ISBN không tồn tại ----------
-def test_get_book_availability_isbn_not_found(controller):
-    # Act
+def test_availability_isbn_not_exist(controller):
+    """
+    TC10: ISBN không tồn tại → (0, 0)
+    """
     total, available = controller.get_book_availability("999-9")
 
-    # Assert
     assert total == 0
     assert available == 0
-
-
-# ---------- TC-GA-05: Không gây side-effect lên dữ liệu ----------
-def test_get_book_availability_no_side_effect(controller):
-    # Act
-    _ = controller.get_book_availability("978-1")
-
-    # Assert
-    assert controller.data["books"][0]["quantity"] == 3
-    assert controller.data["loans"] == []

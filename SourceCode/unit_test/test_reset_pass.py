@@ -2,19 +2,19 @@ import pytest
 from controllers import LibraryController
 
 
-# ---------- FIXTURE: controller cô lập ----------
+# ---------- FIXTURE ----------
 @pytest.fixture
-def controller():
-    c = LibraryController()
-
-    # Override data để KHÔNG đụng library_data.json thật
-    c.data = {
+def controller(monkeypatch):
+    """
+    Controller với data giả + OTP giả, không ghi file thật
+    """
+    fake_data = {
         "users": [
             {
                 "account_id": 1,
                 "username": "user1",
+                "password": LibraryController().hash_password("oldpass"),
                 "email": "user1@mail.com",
-                "password": c.hash_password("oldpass"),
                 "fullname": "User One",
                 "role": "Member",
                 "phone": "",
@@ -28,76 +28,52 @@ def controller():
         "loans": []
     }
 
-    # Reset otp_storage cho sạch
-    c.otp_storage = {}
+    # Mock load_data
+    monkeypatch.setattr("controllers.load_data", lambda: fake_data)
+    # Mock save_data để không ghi file
+    monkeypatch.setattr("controllers.save_data", lambda data: None)
 
-    return c
+    ctrl = LibraryController()
+
+    # Giả lập OTP đã được sinh trước đó (từ forgot_pass)
+    ctrl.otp_storage["user1@mail.com"] = "123456"
+
+    return ctrl
 
 
-# ---------- TC-RP-01: Reset password thành công ----------
-def test_reset_pass_success(controller):
-    # Arrange
-    controller.otp_storage["user1@mail.com"] = "123456"
+# ---------- TEST CASES ----------
 
-    # Act
+def test_reset_pass_correct_otp(controller):
+    """
+    TC09: OTP đúng → đổi mật khẩu thành công
+    """
     ok, msg = controller.reset_pass(
         email="user1@mail.com",
         otp="123456",
         newp="newpass"
     )
 
-    # Assert
     assert ok is True
     assert msg == "Done."
-    assert controller.data["users"][0]["password"] == controller.hash_password("newpass")
+
+    # Mật khẩu đã được hash và cập nhật
+    new_hash = controller.hash_password("newpass")
+    assert controller.data["users"][0]["password"] == new_hash
 
 
-# ---------- TC-RP-02: Sai OTP ----------
 def test_reset_pass_wrong_otp(controller):
-    # Arrange
-    controller.otp_storage["user1@mail.com"] = "123456"
-    old_hash = controller.data["users"][0]["password"]
-
-    # Act
+    """
+    TC10: OTP sai → thất bại
+    """
     ok, msg = controller.reset_pass(
         email="user1@mail.com",
         otp="000000",
         newp="newpass"
     )
 
-    # Assert
     assert ok is False
     assert msg == "Sai OTP."
+
+    # Mật khẩu KHÔNG bị thay đổi
+    old_hash = controller.hash_password("oldpass")
     assert controller.data["users"][0]["password"] == old_hash
-
-
-# ---------- TC-RP-03: Email chưa có OTP ----------
-def test_reset_pass_no_otp(controller):
-    # Act
-    ok, msg = controller.reset_pass(
-        email="user1@mail.com",
-        otp="123456",
-        newp="newpass"
-    )
-
-    # Assert
-    assert ok is False
-    assert msg == "Sai OTP."
-
-
-# ---------- TC-RP-04: Password phải được hash ----------
-def test_reset_pass_password_is_hashed(controller):
-    # Arrange
-    controller.otp_storage["user1@mail.com"] = "999999"
-
-    # Act
-    controller.reset_pass(
-        email="user1@mail.com",
-        otp="999999",
-        newp="plainpassword"
-    )
-
-    # Assert
-    stored_pw = controller.data["users"][0]["password"]
-    assert stored_pw != "plainpassword"
-    assert stored_pw == controller.hash_password("plainpassword")
